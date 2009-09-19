@@ -1,11 +1,10 @@
 <?php
 /*
 Plugin Name: JumpAround Importer
-Plugin URI:
+Plugin URI: http://wordpress.org/extend/plugins/jump-around-importer/
 Description: Plugin to easy import Flick pictures with a certain tags to wordpress and create a draft
 Version: 0.1
 Author: Tobias Bielohlawek, Christoph Büttner
-Author URI:
 
 Copyright 2009
 
