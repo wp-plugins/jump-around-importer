@@ -3,7 +3,7 @@
 Plugin Name: JumpAround Importer
 Plugin URI: http://wordpress.org/extend/plugins/jump-around-importer/
 Description: Plugin to easy import Flick pictures with a certain tags to wordpress and create a draft
-Version: 0.1
+Version: 0.2
 Author: Tobias Bielohlawek, Christoph Büttner
 
 Copyright 2009
@@ -48,14 +48,8 @@ class JumpAroundImporter extends FlickrManager {
     }
 
     function import() {
-        if(empty($_REQUEST['import_ids']))  {
-            return $this->import_page();
-        }
-        $this->process($_REQUEST['import_ids']);
-    }
-
-    function import_page() {
         global $flickr_settings;
+        $import_ids = (!empty($_REQUEST['import_ids'])) ? $_REQUEST['import_ids'] : array();
         $token = $flickr_settings->getSetting('token');
         if(empty($token)) {
             echo '<div class="wrap"><h3>' . __('Error: Please authenticate through ', 'flickr-manager') . '<a href="'.get_option('siteurl')."/wp-admin/options-general.php?page=$this->plugin_directory/$this->plugin_filename\">Settings->Flickr</a></h3></div>\n";
@@ -81,34 +75,47 @@ class JumpAroundImporter extends FlickrManager {
 
                     <tbody id="the-list">
                         <?php
-                        $import_ids = (!empty($_REQUEST['import_ids'])) ? $_REQUEST['import_ids'] : array();
                         foreach($this->all($import_ids) AS $count => $photo) :
+                          if(sizeof($import_ids) > 0) {
+                             $post_id = $this->create($photo); 
+                          }
                         ?>
                         <tr <?php if($count % 2 > 0) echo "class='alternate'"; ?>>
-                            <td align="left"><?php echo $photo['title']; ?><br><?php echo $photo['date']; ?><br><?php echo $photo['tags']; ?></td>
+                            <td align="left">
+                              <?php echo $photo['title']; ?><br>
+                              <?php echo $photo['description']; ?><br>                              
+                              <?php echo date('Y-m-d H:i:s', $photo['date']); ?><br>
+                              <?php echo $photo['tags']; ?><br>
+                              <?php echo $photo['geo']; ?>
+                            </td>
                             <td align="left">
                                 <?php foreach( $photo['urls'] AS $url ) {
                                     preg_match('/\/([0-9]+)_/', $url, $matches);
                                     $id = $matches[1];
-                                    echo '<img src="'.str_replace('.jpg', '_s.jpg', $url).'" /><input type="checkbox" name="import_ids[]" checked2 value="'.$id.'">';
+                                    echo '<div style="float:left;text-align:center;margin-right:3px;"><img src="'.str_replace('.jpg', '_s.jpg', $url).'" /><br>';
+                                    if(sizeof($import_ids) > 0) {
+                                         echo "<b><font color='green'>OK</font></b>";
+                                    }
+                                    else {
+                                         echo '<input type="checkbox" name="import_ids[]" checked value="'.$id.'">';
+                                    }
+                                    echo '</div>';
                                 } 
                                 ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
-                </table>
-                <input type="submit" name="submit" value="Import selected Pictures" />
+                </table><br>
+                <?php if(sizeof($import_ids) > 0) {
+                  echo '<a href="/wp-admin/post.php">Goto to Posts</a>';
+                }
+                else {
+                  echo '<input type="submit" name="submit" value="Import selected Pictures" />';
+                } ?>
             </div>
         </form>
         <?php
-    }
-
-    public function process($import_ids) {
-        foreach($this->all($import_ids) AS $count => $photo) {
-            $post_id = $this->create($photo);
-            echo $post_id;
-        }
     }
 
     public function all($import_ids = array()) {
@@ -128,20 +135,19 @@ class JumpAroundImporter extends FlickrManager {
             $geo = $geo['latitude'].','.$geo['longitude'];
             if(empty($items[$geo])) $items[$geo] = array('geo' => $geo, 'urls' => array());
 
-            $items[$geo]['title'] .= $photo['title'].' ';
+            $title = trim($photo['title']);
+            if(stristr($items[$geo]['title'], $title) === FALSE) $items[$geo]['title'] .= $title.' ';
             $items[$geo]['urls'][] = $this->getPhotoUrl($photo, 'medium');
 
             $info = $this->getInfo($photo);
-            $items[$geo]['date'] = $info['dates']['taken'];
+            $items[$geo]['date'] = strtotime($info['dates']['taken']);
             #if(empty($date)) continue;
-            $desc = $info['description']['_content'];
-            if(stristr($items[$geo]['description'], $desc) === FALSE) $items[$geo]['description'] .= $desc.' ';
+            $desc = trim($info['description']['_content']);
+            if($desc != 'jump' && stristr($items[$geo]['description'], $desc) === FALSE) $items[$geo]['description'] .= $desc.' ';
 
             foreach($info['tags']['tag'] AS $raw_tag) {
                 $tag = $raw_tag['raw'];
-                if($tag != 'jump' && stristr($items[$geo]['tag'], $tag) === FALSE) {
-                    $items[$geo]['tags'] .= $tag.",";
-                }
+                if($tag != 'jump' && stristr($items[$geo]['tags'], $tag) === FALSE) $items[$geo]['tags'] .= $tag.",";
             }
         }
         return $items;
@@ -184,9 +190,11 @@ class JumpAroundImporter extends FlickrManager {
     function create($photo) {
         // Create post object
         $my_post = array(
+            'post_status' => 'future',
+            'post_type' => 'post',            
             'post_title'   => $photo['title'],
             'post_content' => $photo['description'],
-            'post_date'    => $photo['date'], //The time post was made.
+            'post_date'    => date('Y-m-d H:i:s',$photo['date'] + 1000 * 365 * 60 * 60 * 24), //The time post was made.
             'tags_input'   => $photo['tags'] //For tags.
         );
 
